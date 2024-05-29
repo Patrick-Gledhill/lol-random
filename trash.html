@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>ARK: Survival Evolved 1D</title>
+	<style>
+		body {
+			font-family: Arial, sans-serif;
+			background-color: #2c3e50;
+			color: #ecf0f1;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			/* height: 100vh; */
+			position: absolute;
+			top: 0px;
+			left: 0px;
+			right: 0px;
+			bottom: 0px;
+			margin: 0;
+			padding: 20px;
+			flex-direction: column;
+		}
+
+		.yellow-outline-focus {
+			outline: none;
+			position: relative;
+		}
+
+		@keyframes grow-shrink-yellow-outline {
+			0% {
+				width: calc(100% + 4px);
+				height: calc(100% + 4px);
+				transform: translate(-2px, -2px);
+			}
+
+			100% {
+				width: calc(100% + 6px);
+				height: calc(100% + 6px);
+				transform: translate(-3px, -3px);
+			}
+		}
+
+		.yellow-outline-focus:before {
+			content: "";
+			position: absolute;
+			outline: none;
+			top: 0px;
+			left: 0px;
+			bottom: 0px;
+			right: 0px;
+			width: calc(100% + 4px);
+			height: calc(100% + 4px);
+			transform: translate(-2px, -2px);
+			border-radius: 3px;
+			z-index: 9999;
+			animation: grow-shrink-yellow-outline 1s cubic-bezier(1, 0, 0, 1) 0s infinite normal;
+		}
+
+		.yellow-outline-focus:focus:before {
+			/* outline: solid 1px #ffff00; */
+			box-shadow: 0px 0px 4px 4px #ffff00bf;
+		}
+
+		#game {
+			display: flex;
+			width: 100%;
+			max-width: 800px;
+			margin-bottom: 10px;
+		}
+
+		#log {
+			height: 400px;
+			overflow-y: scroll;
+			border: 1px solid #34495e;
+			padding: 10px;
+			background-color: #34495e;
+			flex: 1;
+		}
+
+		#log p {
+			margin: 5px 0;
+		}
+
+		#sidebar {
+			width: 256px;
+			height: 400px;
+			overflow-y: scroll;
+			border: 1px solid #34495e;
+			padding: 10px;
+			background-color: #34495e;
+		}
+
+		#sidebar p {
+			margin: 5px 0;
+		}
+
+		#input-area {
+			display: flex;
+			width: 100%;
+			max-width: 800px;
+		}
+
+		input,
+		button {
+			padding: 10px;
+			font-size: 16px;
+			margin: 5px 0px;
+			background: #2c3e50;
+			border: 1px solid #7594b3;
+			color: #ecf0f1;
+		}
+
+		input {
+			flex: 1;
+		}
+
+		button {
+			margin-left: 10px;
+		}
+
+		.center-items-with-gap {
+			display: flex;
+			align-items: center;
+			/* justify-content: center; */
+			gap: 8px;
+		}
+	</style>
+</head>
+<body>
+	<div id="game">
+		<div id="log"></div>
+		<div id="sidebar">
+			<h3 style="margin: 0px;">Status</h3>
+			<p id="wood" class="center-items-with-gap"><img src="./wood_icon.webp" width="32"> Wood: 0</p>
+			<p id="thatch" class="center-items-with-gap"><img src="./thatch_icon.webp" width="32"> Thatch: 0</p>
+			<p id="stone" class="center-items-with-gap"><img src="./stone_icon.webp" width="32"> Stone: 0</p>
+			<p id="berries" class="center-items-with-gap"><img src="./berries_icon.webp" width="32"> Berries: 0</p>
+			<p id="fiber" class="center-items-with-gap"><img src="./fiber_icon.webp" width="32"> Fiber: 0</p>
+			<p id="hide" class="center-items-with-gap"><img src="./hide_icon.webp" width="32"> Hide: 0</p>
+			<p id="meat" class="center-items-with-gap"><img src="./raw_meat_icon.webp" width="32"> Meat: 0</p>
+			<p id="cookedMeat" class="center-items-with-gap"><img src="./cooked_meat_icon.webp" width="32"> Cooked Meat:
+				0</p>
+			<p id="campfire" class="center-items-with-gap"><img src="./campfire_icon.webp" width="32"> Campfire: No</p>
+			<p id="health" class="center-items-with-gap"><img src="./medical_brew_icon.webp" width="32"> Health: 100</p>
+		</div>
+	</div>
+	<div id="input-area">
+		<input type="text" id="command" placeholder="Enter command" autocomplete="off" class="yellow-outline-focus">
+		<button onclick="processCommand()" class="yellow-outline-focus">Execute</button>
+	</div>
+
+	<script>
+		window.onerror = function (ev, src, lineno, colno, err) {
+			alert(`${ev}\n${src}\n${lineno}:${colno}\n${err}`);
+		}
+
+		function random(min, max) {
+			return Math.random() * (max - min) + min;
+		}
+
+		let resources = {
+			wood: 0,
+			thatch: 0,
+			stone: 0,
+			berries: 0,
+			fiber: 0,
+			hide: 0,
+			meat: 0,
+			cookedMeat: 0,
+			health: 100
+		};
+
+		let environment = {
+			safe: false,
+			campfire: false,
+			campfireWood: 0
+		};
+
+		const log = document.getElementById('log');
+		const commandInput = document.getElementById('command');
+
+		function logMessage(message) {
+			const p = document.createElement('p');
+			p.textContent = message;
+			log.appendChild(p);
+			log.scrollTop = log.scrollHeight;
+		}
+
+		function updateSidebar() {
+			if (resources.health <= 0) {
+				gameOver();
+			}
+
+			if (resources.health > 100) {
+				resources.health = 100;
+			}
+
+			document.getElementById('wood').innerHTML = `<img src="./wood_icon.webp" width="32"> Wood: ${resources.wood}`;
+			document.getElementById('thatch').innerHTML = `<img src="./thatch_icon.webp" width="32"> Thatch: ${resources.thatch}`;
+			document.getElementById('stone').innerHTML = `<img src="./stone_icon.webp" width="32"> Stone: ${resources.stone}`;
+			document.getElementById('berries').innerHTML = `<img src="./berries_icon.webp" width="32"> Berries: ${resources.berries}`;
+			document.getElementById('fiber').innerHTML = `<img src="./fiber_icon.webp" width="32"> Fiber: ${resources.fiber}`;
+			document.getElementById('hide').innerHTML = `<img src="./hide_icon.webp" width="32"> Hide: ${resources.hide}`;
+			document.getElementById('meat').innerHTML = `<img src="./raw_meat_icon.webp" width="32"> Meat: ${resources.meat}`;
+			document.getElementById('cookedMeat').innerHTML = `<img src="./cooked_meat_icon.webp" width="32"> Cooked Meat: ${resources.cookedMeat}`;
+			document.getElementById('campfire').innerHTML = `<img src="./campfire_icon.webp" width="32"> Campfire: ${environment.campfire ? 'Yes' : 'No'} (${environment.campfireWood} wood)`;
+			document.getElementById('health').innerHTML = `<img src="./medical_brew_icon.webp" width="32"> Health: ${resources.health}`;
+		}
+
+		function randomEvent() {
+			if (Math.random() < 0.3) {
+				let attack = Math.random() < 0.5 ? 'Dilophosaur' : 'Raptor';
+				let damage = attack === 'Dilophosaur' ? 10 : 20;
+				resources.health -= damage;
+				logMessage(`A wild ${attack} appeared and attacked you, dealing ${damage} damage!`);
+				updateSidebar();
+			}
+		}
+		/*function randomEvent2() {
+		  if (Math.random() < 0.3) {
+			let attack = Math.random() < 0.5 ? 'Giganotosaurus' : 'T-Rex';
+			let damage = attack === 'Giganotosaurus' ? 90 : 99;
+			resources.health -= damage;
+			logMessage(`A wild ${attack} emerged and demolished your structure down to rubble! You were in it and suffered ${damage} damage as a result!`);
+			updateSidebar();
+		  }
+		}
+		*/
+		function periodicRandomEvent() {
+			if (!environment.safe) {
+				randomEvent();
+			}
+			setTimeout(periodicRandomEvent, 10000); // Check for random events every 10 seconds
+		}
+		/*function periodicRandomEvent2() {
+		  if (!environment.safe) {
+			randomEvent2();
+		  }
+		  setTimeout(periodicRandomEvent2, 5000); // Check for random events every 5 seconds
+		}
+		*/
+		function processCommand() {
+			const command = commandInput.value.toLowerCase().replace(/ /g, "").replace(/_/g, "");
+			commandInput.value = '';
+
+			switch (command) {
+				case 'gatherwood':
+					var amount = Math.round(random(1, 3));
+					resources.wood += amount;
+					logMessage(`You gathered ${amount} wood.`);
+					break;
+				case 'gatherthatch':
+					var amount = Math.round(random(1, 6));
+					resources.thatch += amount;
+					logMessage(`You gathered ${amount} thatch.`);
+					break;
+				case 'gatherstone':
+					var amount = Math.round(random(1, 2));
+					resources.stone += amount;
+					logMessage(`You gathered ${amount} stone.`);
+					break;
+				case 'gatherberries':
+					var amount = Math.round(random(1, 6));
+					resources.berries += amount;
+					logMessage(`You gathered ${amount} berr${amount > 1 ? "ies" : "y"}.`);
+					break;
+				case 'gatherfiber':
+					var amount = Math.round(random(1, 4));
+					resources.fiber += amount;
+					logMessage(`You gathered ${amount} fiber.`);
+					break;
+				case 'eatberry':
+					if (resources.berries > 0) {
+						resources.berries -= 1;
+						resources.health += 5;
+						if (resources.health > 100) {
+							resources.health = 100;
+						}
+						logMessage('You ate a berry and gained 5 health.');
+					} else {
+						logMessage('No berries to eat.');
+					}
+					break;
+				case 'eatrawmeat':
+					if (resources.meat > 0) {
+						resources.meat -= 1;
+						resources.health -= 5;
+						if (resources.health > 100) {
+							resources.health = 100;
+						}
+						logMessage('You ate raw meat! Your health decreased by 5 health!');
+					} else {
+						logMessage('No meat to eat.');
+					}
+					break;
+				case 'eatcookedmeat':
+					if (resources.cookedMeat > 0) {
+						resources.cookedMeat -= 1;
+						resources.health += 10;
+						if (resources.health > 100) {
+							resources.health = 100;
+						}
+						logMessage('You ate 1 cooked meat. You gained 10 health.');
+					} else {
+						logMessage('No cooked meat to eat.');
+					}
+					break;
+				case 'buildshelter':
+					if (resources.wood >= 5 && resources.stone >= 5 && resources.fiber >= 5 && resources.thatch >= 8) {
+						resources.wood -= 5;
+						resources.thatch -= 8;
+						resources.stone -= 5;
+						resources.fiber -= 5;
+						environment.safe = true;
+						logMessage('You built a shelter. You are now safe from attacks.');
+					} else {
+						logMessage('Not enough resources to build a shelter.');
+					}
+					break;
+				case 'craftcampfire':
+					if (resources.wood >= 3 && resources.stone >= 3 && resources.thatch >= 1) {
+						resources.thatch -= 1;
+						resources.wood -= 3;
+						resources.stone -= 3;
+						environment.campfire = true;
+						logMessage('You crafted a campfire.');
+					} else {
+						logMessage('Not enough resources to craft a campfire.');
+					}
+					break;
+				case 'addwoodtocampfire':
+					if (environment.campfire) {
+						if (resources.wood > 0) {
+							resources.wood -= 1;
+							environment.campfireWood
+								+= 1;
+							logMessage('You added wood to the campfire.');
+						} else {
+							logMessage('You have no wood to add.');
+						}
+					} else {
+						logMessage('You need a campfire to add wood.');
+					}
+					break;
+				case 'cookmeat':
+					if (resources.meat > 0 && environment.campfire && environment.campfireWood > 0) {
+						resources.meat -= 1;
+						resources.cookedMeat += 1;
+						environment.campfireWood -= 1;
+						logMessage('You cooked meat on the campfire.');
+					} else if (!environment.campfire) {
+						logMessage('You need a campfire to cook meat.');
+					} else if (resources.meat === 0) {
+						logMessage('You have no raw meat to cook.');
+					} else {
+						logMessage('You need more wood in the campfire to cook meat.');
+					}
+					break;
+				case 'fight':
+					if (!environment.safe) {
+						if (Math.random() < 0.5) {
+							resources.hide += 2;
+							resources.meat += 1;
+							logMessage('You fought back and defeated the dinosaur, gaining 2 hide and 1 meat.');
+						}
+						if (Math.random() < 0.2) {
+							let damage = 80;
+							resources.health -= damage;
+							logMessage(`You fought back, but you made the dino very angry! The dino mauled you to shreds! You lost ${damage} health.`);
+							if (resources.health <= 0) {
+								gameOver();
+							}
+						}
+						else {
+							let damage = 15;
+							resources.health -= damage;
+							logMessage(`You fought back but got injured, losing ${damage} health.`);
+							if (resources.health <= 0) {
+								gameOver();
+							}
+						}
+					} else {
+						logMessage('There are no dinosaurs to fight.');
+					}
+					break;
+				case 'hunt':
+					if (Math.random() < 0.5) {
+						resources.hide += 1;
+						resources.meat += 2;
+						logMessage('You went out hunting for game! You gained 2 meat and 1 hide.');
+					}
+					else {
+						logMessage(`You failed to find any game! Better luck next time.`);
+					}
+					break;
+				case 'status':
+					logMessage(`Detailed Status:\nHealth: ${resources.health}\nEnvironment: ${environment.safe ? 'Safe' : 'Dangerous'}`);
+					break;
+				case 'reset':
+					gameOver();
+					logMessage('Game reset. You can start over.');
+					break;
+				case 'eatdirt':
+					resources.health -= 1;
+					logMessage('Uhh... are you dumb?! Why would you eat dirt?!');
+					break;
+				case 'eatsand':
+					resources.health -= 1;
+					logMessage('Uhh... are you dumb?! Why would you eat sand?!');
+					break;
+				case 'attacktitanosaur':
+					resources.health -= 183217981273891273979237913792837;
+					logMessage('You lost approximately 1.83e32 health.'); // 1.83217981273891273979237913792837e32, to be exact.
+					logMessage('Well, that was expected.');
+					break;
+				case 'cheat':
+					if (Math.random() < 0.9) {
+						resources.health += 128;
+						resources.wood += 128;
+						resources.thatch += 128;
+						resources.stone += 128;
+						resources.fiber += 128;
+						resources.hide += 128;
+						resources.berries += 128;
+						resources.meat += 128;
+						resources.cookedMeat += 128;
+						environment.campfire = true;
+						environment.campfireWood += 128;
+						logMessage('Why would you do that? You will pay...');
+					}
+					else {
+						window.close();
+					}
+					break;
+				default:
+					logMessage('Unknown command. Try "gather wood", "gather thatch", "gather stone", "gather berries", "gather fiber", "eat berries", "build shelter", "craft campfire", "add wood to campfire", "eat raw meat","cook meat", "eat cooked meat", "fight", "hunt", "status", or "reset".');
+			}
+
+			if (environment.campfire && environment.campfireWood === 0) {
+				environment.campfire = true;
+				logMessage('Your campfire burned out.');
+			}
+
+			updateSidebar();
+		}
+
+		function gameOver() {
+			logMessage('You have died.');
+			// Reset the game state
+			resources = {
+				wood: 0,
+				thatch: 0,
+				stone: 0,
+				berries: 0,
+				fiber: 0,
+				hide: 0,
+				meat: 0,
+				cookedMeat: 0,
+				health: 100
+			};
+			environment = {
+				safe: false,
+				campfire: false,
+				campfireWood: 0
+			};
+			updateSidebar();
+		}
+
+		document.getElementById('command').addEventListener('keypress', function (e) {
+			if (e.key === 'Enter') {
+				processCommand();
+			}
+		});
+
+		updateSidebar();
+		periodicRandomEvent(); // Start the periodic random event checks
+		//periodicRandomEvent2();
+	</script>
+</body>
+</html>
